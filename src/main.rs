@@ -1,5 +1,6 @@
 mod arms;
 mod csar;
+mod sampler;
 mod structures;
 
 fn main() {}
@@ -9,12 +10,12 @@ mod tests {
     use rand::Rng;
 
     use crate::{
-        arms::Weights,
-        csar::naive_maxgap,
+        arms::{Arms, Weights},
+        csar::{csar, naive_maxgap},
         structures::{uniform_matroid::UniformMatroid, Structure},
     };
 
-    fn test_uniform_matroid_once(n: usize, rank: usize) {
+    fn test_maxgap_uniform_once(n: usize, rank: usize) {
         let structure = UniformMatroid::new(n, rank);
 
         let mut rng = rand::thread_rng();
@@ -30,9 +31,48 @@ mod tests {
     }
 
     #[test]
-    fn test_uniform_matroid() {
+    fn test_maxgap_uniform() {
         for _ in 0..10 {
-            test_uniform_matroid_once(100, 50);
+            test_maxgap_uniform_once(100, 50);
+        }
+    }
+
+    fn test_csar_uniform_once(n: usize, rank: usize) {
+        let mut arms = Arms::new();
+
+        // generate arms randomly
+        let mut rng = rand::thread_rng();
+        for _ in 0..n {
+            arms.add_arm(rng.gen(), rng.gen());
+        }
+
+        let structure = UniformMatroid::new(n, rank);
+
+        let mut csar_optimal = csar(structure.clone(), &mut arms);
+        csar_optimal.sort();
+
+        let means: Weights = structure
+            .get_indices()
+            .iter()
+            .map(|&i| arms.get_mean(i))
+            .collect();
+
+        println!("true means:     {:?}", means);
+
+        let mut true_optimal = structure.optimal(&means);
+        true_optimal.sort();
+
+        println!("csar: {:?}", csar_optimal);
+        println!("true: {:?}", true_optimal);
+        println!("----------");
+
+        // assert!(csar_optimal == true_optimal);
+    }
+
+    #[test]
+    fn test_csar_uniform() {
+        for _ in 0..10 {
+            test_csar_uniform_once(10, 5);
         }
     }
 }
