@@ -1,11 +1,11 @@
 use crate::arms::Weights;
-use crate::structures::uniform_matroid;
+use crate::structures::Structure;
 
-pub fn naive_maxgap(structure: &uniform_matroid::Structure, weights: &Weights) -> usize {
-    let opt_arms = uniform_matroid::optimal(structure, weights);
+pub fn naive_maxgap(structure: &impl Structure, weights: &Weights) -> usize {
+    let opt_arms = structure.optimal(weights);
     let opt_weight: f64 = opt_arms.iter().map(|&i| weights[i]).sum();
 
-    let num_arms = structure.index.iter().max().unwrap() + 1;
+    let num_arms = structure.get_indices().iter().max().unwrap() + 1;
 
     // Whether or not the arm is in the optimal superarm.
     let mut in_opt = vec![false; num_arms];
@@ -16,8 +16,8 @@ pub fn naive_maxgap(structure: &uniform_matroid::Structure, weights: &Weights) -
     let mut maxgap = 0_f64;
     let mut best_arm = 0_usize;
 
-    for &i in &structure.index {
-        let mut new_structure = structure.clone();
+    for &i in structure.get_indices() {
+        let mut new_structure = (*structure).clone();
         let mut subopt_weight = 0_f64;
 
         if in_opt[i] {
@@ -27,7 +27,7 @@ pub fn naive_maxgap(structure: &uniform_matroid::Structure, weights: &Weights) -
             new_structure.contract_arm(i);
         }
 
-        let subopt_arms = uniform_matroid::optimal(&new_structure, weights);
+        let subopt_arms = new_structure.optimal(weights);
         subopt_weight += subopt_arms.iter().map(|&i| weights[i]).sum::<f64>();
         let gap = opt_weight - subopt_weight;
 
