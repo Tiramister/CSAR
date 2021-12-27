@@ -64,9 +64,18 @@ impl Structure for UniformMatroid {
         indexed_weights.sort_unstable_by(|(_, fl), (_, fr)| fl.partial_cmp(fr).unwrap().reverse());
 
         // the maximum gap of arms in the optimal superarm.
-        let in_gap = indexed_weights.first().unwrap().1 - indexed_weights[self.rank].1;
+        let in_gap = if self.rank == indexed_weights.len() {
+            f64::MAX
+        } else {
+            indexed_weights.first().unwrap().1 - indexed_weights[self.rank].1
+        };
+
         // the maximum gap of arms out of the optimal superarm.
-        let out_gap = indexed_weights[self.rank - 1].1 - indexed_weights.last().unwrap().1;
+        let out_gap = if self.rank == 0 {
+            f64::MAX
+        } else {
+            indexed_weights[self.rank - 1].1 - indexed_weights.last().unwrap().1
+        };
 
         if in_gap > out_gap {
             indexed_weights.first().unwrap().0
