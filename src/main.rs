@@ -2,23 +2,37 @@ mod arms;
 mod csar;
 mod structures;
 
-use arms::Weights;
-use rand::Rng;
-use structures::uniform_matroid;
+fn main() {}
 
-fn main() {
-    let n = 10_usize;
-    let rank = 5_usize;
+#[cfg(test)]
+mod tests {
+    use rand::Rng;
 
-    let structure = uniform_matroid::Structure::new(n, rank);
+    use crate::{
+        arms::Weights,
+        csar::naive_maxgap,
+        structures::{uniform_matroid::UniformMatroid, Structure},
+    };
 
-    let mut rng = rand::thread_rng();
-    let weights: Weights = (0..n).map(|_| rng.gen()).collect();
+    fn test_uniform_matroid_once(n: usize, rank: usize) {
+        let structure = UniformMatroid::new(n, rank);
 
-    println!("{:?}", weights);
+        let mut rng = rand::thread_rng();
+        let weights: Weights = (0..n).map(|_| rng.gen()).collect();
 
-    let naive_arm = csar::naive_maxgap(&structure, &weights);
-    let faster_arm = uniform_matroid::fast_maxgap(&structure, &weights);
+        println!("{:?}", weights);
 
-    println!("naive: {}, faster: {}", naive_arm, faster_arm);
+        let naive_arm = naive_maxgap(&structure, &weights);
+        let faster_arm = structure.fast_maxgap(&weights);
+
+        println!("naive: {}, faster: {}", naive_arm, faster_arm);
+        assert!(naive_arm == faster_arm);
+    }
+
+    #[test]
+    fn test_uniform_matroid() {
+        for _ in 0..10 {
+            test_uniform_matroid_once(100, 50);
+        }
+    }
 }
