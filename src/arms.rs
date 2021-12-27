@@ -40,7 +40,7 @@ impl Arms {
     }
 
     pub fn get_mean(&mut self, i: usize) -> f64 {
-        self.arms[i].sample()
+        self.arms[i].get_mean()
     }
 }
 
