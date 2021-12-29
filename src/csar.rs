@@ -52,7 +52,7 @@ pub fn naive_maxgap(structure: &impl Structure, weights: &Weights) -> usize {
     }
 
     let mut maxgap = 0_f64;
-    let mut best_arm = 0_usize;
+    let mut best_arm = None;
 
     for &i in structure.get_indices() {
         let mut new_structure = (*structure).clone();
@@ -71,9 +71,14 @@ pub fn naive_maxgap(structure: &impl Structure, weights: &Weights) -> usize {
 
         if gap > maxgap {
             maxgap = gap;
-            best_arm = i;
+            best_arm = Some(i);
         }
     }
 
-    return best_arm;
+    if let Some(id) = best_arm {
+        id
+    } else {
+        // If any arms should not be chosen, return the first arm.
+        *structure.get_indices().first().unwrap()
+    }
 }
