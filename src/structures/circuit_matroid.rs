@@ -1,5 +1,5 @@
 use super::Structure;
-use crate::{arms::Weights, util::union_find::UnionFind};
+use crate::{arms::Weights, csar::naive_maxgap, util::union_find::UnionFind};
 use core::cmp::max;
 
 #[derive(Clone)]
@@ -81,7 +81,59 @@ impl Structure for CircuitMatroid {
         arms
     }
 
+    /// To be implemented.
     fn fast_maxgap(&self, weights: &Weights) -> usize {
-        todo!();
+        naive_maxgap(self, weights)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use itertools::iproduct;
+    use rand::Rng;
+
+    use crate::{
+        arms::{Arms, Weights},
+        csar::{csar, naive_maxgap},
+        structures::{circuit_matroid::CircuitMatroid, Structure},
+    };
+
+    fn test_csar_once(n: usize) {
+        let edges: Vec<(usize, usize)> =
+            iproduct!((0..n), (0..n)).filter(|&(x, y)| x < y).collect();
+
+        // generate arms randomly
+        let mut arms = Arms::new();
+        let mut rng = rand::thread_rng();
+        for _ in 0..edges.len() {
+            arms.add_arm(rng.gen(), rng.gen());
+        }
+
+        let structure = CircuitMatroid::new(&edges);
+
+        let mut csar_optimal = csar(structure.clone(), &mut arms);
+        csar_optimal.sort();
+
+        let means: Weights = structure
+            .get_indices()
+            .iter()
+            .map(|&i| arms.get_mean(i))
+            .collect();
+
+        println!("true means:     {:?}", means);
+
+        let mut true_optimal = structure.optimal(&means);
+        true_optimal.sort();
+
+        println!("csar: {:?}", csar_optimal);
+        println!("true: {:?}", true_optimal);
+        println!("----------");
+    }
+
+    #[test]
+    fn test_csar() {
+        for _ in 0..10 {
+            test_csar_once(10);
+        }
     }
 }
