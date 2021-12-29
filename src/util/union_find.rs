@@ -13,15 +13,14 @@ impl UnionFind {
     }
 
     /// Set u as the parent of v.
-    /// It is required that u and v are roots of different subtrees.
-    pub fn unite(&mut self, u: usize, v: usize) -> &mut Self {
-        // Check the requirement.
-        assert_eq!(self.par[u], u);
-        assert_eq!(self.par[v], v);
-        assert_ne!(u, v);
+    pub fn unite(&mut self, mut u: usize, mut v: usize) -> &mut Self {
+        u = self.par[u];
+        v = self.par[v];
 
-        self.size[u] += self.size[v];
-        self.par[v] = u;
+        if u != v {
+            self.size[u] += self.size[v];
+            self.par[v] = u;
+        }
 
         self
     }
