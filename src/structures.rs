@@ -1,3 +1,4 @@
+pub mod circuit_matroid;
 pub mod uniform_matroid;
 
 use crate::arms::Weights;
