@@ -1,23 +1,17 @@
 use super::Structure;
-use crate::{arms::Weights, csar::naive_maxgap, util::union_find::UnionFind};
-use core::cmp::max;
+use crate::{arms::Weights, csar::naive_maxgap, util::graph::Graph};
 
 #[derive(Clone)]
 pub struct CircuitMatroid {
     indices: Vec<usize>,
-    edges: Vec<(usize, usize)>,
-    vnum: usize,
+    graph: Graph,
 }
 
 impl CircuitMatroid {
-    pub fn new(_edges: &Vec<(usize, usize)>) -> Self {
+    pub fn new(edges: &Vec<(usize, usize)>) -> Self {
         CircuitMatroid {
-            indices: (0.._edges.len()).collect(),
-            edges: _edges.clone(),
-            vnum: _edges
-                .iter()
-                .fold(0_usize, |acc, &(u, v)| max(max(acc, u), v))
-                + 1,
+            indices: (0..edges.len()).collect(),
+            graph: Graph::new(edges),
         }
     }
 }
@@ -27,58 +21,36 @@ impl Structure for CircuitMatroid {
         &self.indices
     }
 
-    fn contract_arm(&mut self, i: usize) -> &mut Self {
+    fn contract_by_arm(&mut self, i: usize) -> &mut Self {
         let pos = self.get_indices().iter().position(|&r| r == i).unwrap();
+        self.graph.contract_by_edge(pos);
 
-        // Contract s and t
-        let (s, t) = self.edges[pos];
-        for (u, v) in self.edges.iter_mut() {
-            if *u == t {
-                *u = s;
-            }
-            if *v == t {
-                *v = s;
-            }
-        }
-
-        // Delete
+        // Keep the order of edges
         self.indices.swap_remove(pos);
-        self.edges.swap_remove(pos);
+
         self
     }
 
     fn delete_arm(&mut self, i: usize) -> &mut Self {
         let pos = self.get_indices().iter().position(|&r| r == i).unwrap();
+        self.graph.delete_edge(pos);
+
+        // Keep the order of edges
         self.indices.swap_remove(pos);
-        self.edges.swap_remove(pos);
+
         self
     }
 
-    /// Find the maximum spanning tree by the Kruskal's algorithm
-    fn optimal(&self, weights: &Weights) -> Vec<usize> {
-        // zip indices of arms, edges, and weights
-        let mut indexed_weights: Vec<(usize, (usize, usize), f64)> = (0..self.indices.len())
-            .map(|i| {
-                let arm_id = self.indices[i];
-                (arm_id, self.edges[i], weights[arm_id])
-            })
-            .collect();
+    fn optimal(&self, weights: &Weights) -> Option<Vec<usize>> {
+        // Reorder weights by edge-indices.
+        let mapped_weights: Weights = (0..self.indices.len()).map(|i| weights[i]).collect();
 
-        // Sort by weights in decreasing order
-        indexed_weights
-            .sort_unstable_by(|(_, _, fl), (_, _, fr)| fl.partial_cmp(fr).unwrap().reverse());
-
-        // Add the heaviest edge greedily if it doesn't induce any cycle.
-        let mut arms = Vec::<usize>::new();
-        let mut uf = UnionFind::new(self.vnum);
-        for (i, (u, v), _w) in indexed_weights {
-            if !uf.same(u, v) {
-                uf.unite(u, v);
-                arms.push(i);
-            }
+        if let Some(mst) = self.graph.maximum_spanning_tree(&mapped_weights) {
+            // Convert edge-indices to arm-indices.
+            Some(mst.iter().map(|&i| self.indices[i]).collect())
+        } else {
+            None
         }
-
-        arms
     }
 
     /// To be implemented.
@@ -120,9 +92,7 @@ mod tests {
             .map(|&i| arms.get_mean(i))
             .collect();
 
-        println!("true means:     {:?}", means);
-
-        let mut true_optimal = structure.optimal(&means);
+        let mut true_optimal = structure.optimal(&means).unwrap();
         true_optimal.sort();
 
         println!("csar: {:?}", csar_optimal);
