@@ -21,7 +21,7 @@ impl Structure for UniformMatroid {
         &self.indices
     }
 
-    fn contract_arm(&mut self, i: usize) -> &mut Self {
+    fn contract_by_arm(&mut self, i: usize) -> &mut Self {
         let pos = self.get_indices().iter().position(|&r| r == i).unwrap();
         self.indices.swap_remove(pos);
         self.rank -= 1;
@@ -34,7 +34,11 @@ impl Structure for UniformMatroid {
         self
     }
 
-    fn optimal(&self, weights: &Weights) -> Vec<usize> {
+    fn optimal(&self, weights: &Weights) -> Option<Vec<usize>> {
+        if self.indices.len() < self.rank {
+            return None;
+        }
+
         // zip indices of arms and their weights
         let mut indexed_weights: Vec<(usize, f64)> = self
             .get_indices()
@@ -49,7 +53,7 @@ impl Structure for UniformMatroid {
         indexed_weights.truncate(self.rank);
 
         // map to their original indices
-        indexed_weights.iter().map(|(i, _)| *i).collect()
+        Some(indexed_weights.iter().map(|(i, _)| *i).collect())
     }
 
     fn fast_maxgap(&self, weights: &Weights) -> usize {
@@ -65,14 +69,14 @@ impl Structure for UniformMatroid {
 
         // the maximum gap of arms in the optimal superarm.
         let in_gap = if self.rank == indexed_weights.len() {
-            f64::MAX
+            f64::INFINITY
         } else {
             indexed_weights.first().unwrap().1 - indexed_weights[self.rank].1
         };
 
         // the maximum gap of arms out of the optimal superarm.
         let out_gap = if self.rank == 0 {
-            f64::MAX
+            f64::INFINITY
         } else {
             indexed_weights[self.rank - 1].1 - indexed_weights.last().unwrap().1
         };
@@ -137,9 +141,7 @@ mod tests {
             .map(|&i| arms.get_mean(i))
             .collect();
 
-        println!("true means:     {:?}", means);
-
-        let mut true_optimal = structure.optimal(&means);
+        let mut true_optimal = structure.optimal(&means).unwrap();
         true_optimal.sort();
 
         println!("csar: {:?}", csar_optimal);
