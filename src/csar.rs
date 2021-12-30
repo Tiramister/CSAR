@@ -11,39 +11,36 @@ pub fn csar(mut structure: impl Structure, arms: &mut Arms) -> Vec<usize> {
     let mut samplers: Vec<Sampler> = (0..n).map(|_| Sampler::new()).collect();
 
     for _ in 0..n {
-        // sample the remaining arms 1000 times
+        // sample the remaining arms 100 times
         for &i in structure.get_indices() {
-            for _ in 0..1000 {
+            for _ in 0..100 {
                 samplers[i].observe(arms.sample(i));
             }
         }
 
         let weights: Vec<f64> = (0..n).map(|i| samplers[i].get_mean()).collect();
 
-        let best_arms = structure.optimal(&weights);
+        // Find the optimal superarm and the arm with the maximum gap.
+        let best_arms = structure.optimal(&weights).unwrap();
         let maxgap_arm = structure.fast_maxgap(&weights);
 
+        // Contract or delete the arm.
         if best_arms.contains(&maxgap_arm) {
             accepted_arms.push(maxgap_arm);
-            structure.contract_arm(maxgap_arm);
+            structure.contract_by_arm(maxgap_arm);
         } else {
             structure.delete_arm(maxgap_arm);
         }
-    }
-
-    {
-        let weights: Vec<f64> = (0..n).map(|i| samplers[i].get_mean()).collect();
-        println!("empirical means: {:?}", weights);
     }
 
     accepted_arms
 }
 
 pub fn naive_maxgap(structure: &impl Structure, weights: &Weights) -> usize {
-    let opt_arms = structure.optimal(weights);
+    let opt_arms = structure.optimal(weights).unwrap();
     let opt_weight: f64 = opt_arms.iter().map(|&i| weights[i]).sum();
 
-    let num_arms = structure.get_indices().iter().max().unwrap() + 1;
+    let num_arms = structure.get_indices().iter().max().unwrap_or(&0) + 1;
 
     // Whether or not the arm is in the optimal superarm.
     let mut in_opt = vec![false; num_arms];
@@ -62,11 +59,15 @@ pub fn naive_maxgap(structure: &impl Structure, weights: &Weights) -> usize {
             new_structure.delete_arm(i);
         } else {
             subopt_weight += weights[i];
-            new_structure.contract_arm(i);
+            new_structure.contract_by_arm(i);
         }
 
-        let subopt_arms = new_structure.optimal(weights);
-        subopt_weight += subopt_arms.iter().map(|&i| weights[i]).sum::<f64>();
+        subopt_weight += if let Some(subopt_arms) = new_structure.optimal(weights) {
+            subopt_arms.iter().map(|&i| weights[i]).sum::<f64>()
+        } else {
+            // The maximum weight of an infeasible structure is -INF.
+            f64::NEG_INFINITY
+        };
         let gap = opt_weight - subopt_weight;
 
         if gap > maxgap {
