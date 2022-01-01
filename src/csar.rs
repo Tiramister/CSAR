@@ -2,6 +2,7 @@ use crate::arms::{Arms, Weights};
 use crate::sampler::Sampler;
 use crate::structures::Structure;
 
+/// Find the optimal superarm by the CSAR algorithm.
 pub fn csar(mut structure: impl Structure, arms: &mut Arms) -> Vec<usize> {
     let mut accepted_arms = Vec::<usize>::new();
 
@@ -36,13 +37,19 @@ pub fn csar(mut structure: impl Structure, arms: &mut Arms) -> Vec<usize> {
     accepted_arms
 }
 
+/// Find the arm with the maximum gap.
+/// It is required that the number of arms is greater than 0 and equal to the length of `weights`.
 pub fn naive_maxgap(structure: &impl Structure, weights: &Weights) -> usize {
+    // Check the requirement
+    assert_ne!(structure.get_indices().len(), 0);
+    assert_eq!(structure.get_indices().len(), weights.len());
+
+    // Find the optimal superarm
     let opt_arms = structure.optimal(weights).unwrap();
     let opt_weight: f64 = opt_arms.iter().map(|&i| weights[i]).sum();
 
-    let num_arms = structure.get_indices().iter().max().unwrap_or(&0) + 1;
-
     // Whether or not the arm is in the optimal superarm.
+    let num_arms = structure.get_indices().iter().max().unwrap_or(&0) + 1;
     let mut in_opt = vec![false; num_arms];
     for &i in &opt_arms {
         in_opt[i] = true;
@@ -56,16 +63,19 @@ pub fn naive_maxgap(structure: &impl Structure, weights: &Weights) -> usize {
         let mut subopt_weight = 0_f64;
 
         if in_opt[i] {
+            // The superarm excludes the arm i.
             new_structure.delete_arm(i);
         } else {
+            // The superarm contains the arm i.
             subopt_weight += weights[i];
             new_structure.contract_by_arm(i);
         }
 
+        // Find the sub-optimal superarm w.r.t. the arm i.
         subopt_weight += if let Some(subopt_arms) = new_structure.optimal(weights) {
             subopt_arms.iter().map(|&i| weights[i]).sum::<f64>()
         } else {
-            // The maximum weight of an infeasible structure is -INF.
+            // If there is no superarm, the maximum weight is -INF.
             f64::NEG_INFINITY
         };
         let gap = opt_weight - subopt_weight;
