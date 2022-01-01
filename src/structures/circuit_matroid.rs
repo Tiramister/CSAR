@@ -11,7 +11,7 @@ impl CircuitMatroid {
     pub fn new(edges: &Vec<(usize, usize)>) -> Self {
         CircuitMatroid {
             indices: (0..edges.len()).collect(),
-            graph: Graph::new(edges),
+            graph: Graph::from_edges(edges),
         }
     }
 }
