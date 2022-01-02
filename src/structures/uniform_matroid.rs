@@ -99,7 +99,7 @@ mod tests {
         structures::{uniform_matroid::UniformMatroid, Structure},
     };
 
-    fn test_maxgap_uniform_once(n: usize, rank: usize) {
+    fn test_maxgap_once(n: usize, rank: usize) {
         let structure = UniformMatroid::new(n, rank);
 
         let mut rng = rand::thread_rng();
@@ -115,13 +115,13 @@ mod tests {
     }
 
     #[test]
-    fn test_maxgap_uniform() {
+    fn test_maxgap() {
         for _ in 0..10 {
-            test_maxgap_uniform_once(100, 50);
+            test_maxgap_once(100, 50);
         }
     }
 
-    fn test_csar_uniform_once(n: usize, rank: usize) {
+    fn test_csar_once(n: usize, rank: usize) {
         let mut arms = Arms::new();
 
         // generate arms randomly
@@ -152,9 +152,9 @@ mod tests {
     }
 
     #[test]
-    fn test_csar_uniform() {
+    fn test_csar() {
         for _ in 0..10 {
-            test_csar_uniform_once(10, 5);
+            test_csar_once(10, 5);
         }
     }
 }
