@@ -14,10 +14,16 @@ impl UnionFind {
         }
     }
 
+    /// Return the size of the set containing v.
+    pub fn get_size(&mut self, mut v: usize) -> usize {
+        v = self.find_root(v);
+        self.size[v]
+    }
+
     /// Merge the set containing u and the one containing v.
     pub fn unite(&mut self, mut u: usize, mut v: usize) -> &mut Self {
-        u = self.par[u];
-        v = self.par[v];
+        u = self.find_root(u);
+        v = self.find_root(v);
 
         if u != v {
             // Balancing

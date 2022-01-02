@@ -33,6 +33,14 @@ impl Graph {
         }
     }
 
+    pub fn get_vnum(&self) -> usize {
+        self.vnum
+    }
+
+    pub fn get_edges(&self) -> Vec<(usize, usize)> {
+        self.edges.clone()
+    }
+
     /// Contract this graph by the i-th edge.
     /// You can keep the indices of edges by swap_remove(i).
     pub fn contract_by_edge(&mut self, i: usize) -> &mut Self {
@@ -249,13 +257,10 @@ impl Graph {
 
 #[cfg(test)]
 mod tests {
-    use std::mem::swap;
-
-    use rand::Rng;
-
-    use crate::util::union_find::UnionFind;
-
     use super::Graph;
+    use crate::util::union_find::UnionFind;
+    use rand::Rng;
+    use std::mem::swap;
 
     #[test]
     fn reachable_random() {
