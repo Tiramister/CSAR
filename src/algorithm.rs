@@ -1,9 +1,9 @@
 use crate::arms::{Arms, Weights};
 use crate::sampler::Sampler;
-use crate::structures::Structure;
+use crate::structure::CombinatorialStructure;
 
 /// Find the optimal superarm by the CSAR algorithm.
-pub fn csar(mut structure: impl Structure, arms: &mut Arms) -> Vec<usize> {
+pub fn csar(mut structure: impl CombinatorialStructure, arms: &mut Arms) -> Vec<usize> {
     let mut accepted_arms = Vec::<usize>::new();
 
     // the total number of arms
@@ -28,7 +28,7 @@ pub fn csar(mut structure: impl Structure, arms: &mut Arms) -> Vec<usize> {
         // Contract or delete the arm.
         if best_arms.contains(&maxgap_arm) {
             accepted_arms.push(maxgap_arm);
-            structure.contract_by_arm(maxgap_arm);
+            structure.contract_arm(maxgap_arm);
         } else {
             structure.delete_arm(maxgap_arm);
         }
@@ -39,7 +39,7 @@ pub fn csar(mut structure: impl Structure, arms: &mut Arms) -> Vec<usize> {
 
 /// Find the arm with the maximum gap.
 /// It is required that the number of arms is greater than 0 and equal to the length of `weights`.
-pub fn naive_maxgap(structure: &impl Structure, weights: &Weights) -> usize {
+pub fn naive_maxgap(structure: &impl CombinatorialStructure, weights: &Weights) -> usize {
     // Check the requirement
     assert_ne!(structure.get_indices().len(), 0);
     assert_eq!(structure.get_indices().len(), weights.len());
@@ -68,7 +68,7 @@ pub fn naive_maxgap(structure: &impl Structure, weights: &Weights) -> usize {
         } else {
             // The superarm contains the arm i.
             subopt_weight += weights[i];
-            new_structure.contract_by_arm(i);
+            new_structure.contract_arm(i);
         }
 
         // Find the sub-optimal superarm w.r.t. the arm i.

@@ -1,5 +1,5 @@
-use super::Structure;
-use crate::arms::Weights;
+use super::CombinatorialStructure;
+use crate::{arms::Weights, util::graph::Graph};
 
 #[derive(Clone)]
 pub struct UniformMatroid {
@@ -16,12 +16,12 @@ impl UniformMatroid {
     }
 }
 
-impl Structure for UniformMatroid {
+impl CombinatorialStructure for UniformMatroid {
     fn get_indices(&self) -> &Vec<usize> {
         &self.indices
     }
 
-    fn contract_by_arm(&mut self, i: usize) -> &mut Self {
+    fn contract_arm(&mut self, i: usize) -> &mut Self {
         let pos = self.get_indices().iter().position(|&r| r == i).unwrap();
         self.indices.swap_remove(pos);
         self.rank -= 1;
@@ -56,36 +56,24 @@ impl Structure for UniformMatroid {
         Some(indexed_weights.iter().map(|(i, _)| *i).collect())
     }
 
-    fn fast_maxgap(&self, weights: &Weights) -> usize {
-        // zip indices of arms and their weights
-        let mut indexed_weights: Vec<(usize, f64)> = self
-            .get_indices()
-            .iter()
-            .map(|&i| (i, weights[i]))
-            .collect();
+    fn reachability_graph(&self, basis: &Vec<usize>) -> Graph {
+        let n = self.indices.len();
 
-        // sort by weights in decreasing order
-        indexed_weights.sort_unstable_by(|(_, fl), (_, fr)| fl.partial_cmp(fr).unwrap().reverse());
-
-        // the maximum gap of arms in the optimal superarm.
-        let in_gap = if self.rank == indexed_weights.len() {
-            f64::INFINITY
-        } else {
-            indexed_weights.first().unwrap().1 - indexed_weights[self.rank].1
-        };
-
-        // the maximum gap of arms out of the optimal superarm.
-        let out_gap = if self.rank == 0 {
-            f64::INFINITY
-        } else {
-            indexed_weights[self.rank - 1].1 - indexed_weights.last().unwrap().1
-        };
-
-        if in_gap > out_gap {
-            indexed_weights.first().unwrap().0
-        } else {
-            indexed_weights.last().unwrap().0
+        let mut in_basis = vec![false; n];
+        for &i in basis {
+            in_basis[i] = true;
         }
+
+        let mut result_graph = Graph::new(n + 1);
+        for v in 0..n {
+            if in_basis[v] {
+                result_graph.add_edge(v, n);
+            } else {
+                result_graph.add_edge(n, v);
+            }
+        }
+
+        result_graph
     }
 }
 
@@ -94,9 +82,9 @@ mod tests {
     use rand::Rng;
 
     use crate::{
+        algorithm::{csar, naive_maxgap},
         arms::{Arms, Weights},
-        csar::{csar, naive_maxgap},
-        structures::{uniform_matroid::UniformMatroid, Structure},
+        structure::{uniform_matroid::UniformMatroid, CombinatorialStructure},
     };
 
     fn test_maxgap_once(n: usize, rank: usize) {
