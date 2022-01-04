@@ -1,24 +1,30 @@
 use super::CombinatorialStructure;
-use crate::{arms::Weights, util::graph::Graph};
+use crate::util::graph::Graph;
 
 #[derive(Clone)]
 pub struct UniformMatroid {
+    arm_num: usize,
     indices: Vec<usize>,
     rank: usize,
 }
 
 impl UniformMatroid {
-    pub fn new(n: usize, _rank: usize) -> Self {
+    pub fn new(arm_num: usize, rank: usize) -> Self {
         UniformMatroid {
-            indices: (0..n).collect(),
-            rank: _rank,
+            arm_num,
+            indices: (0..arm_num).collect(),
+            rank,
         }
     }
 }
 
 impl CombinatorialStructure for UniformMatroid {
-    fn get_indices(&self) -> &Vec<usize> {
-        &self.indices
+    fn get_arm_num(&self) -> usize {
+        self.arm_num
+    }
+
+    fn get_indices(&self) -> Vec<usize> {
+        self.indices.clone()
     }
 
     fn contract_arm(&mut self, i: usize) -> &mut Self {
@@ -34,7 +40,7 @@ impl CombinatorialStructure for UniformMatroid {
         self
     }
 
-    fn optimal(&self, weights: &Weights) -> Option<Vec<usize>> {
+    fn optimal(&self, weights: &[f64]) -> Option<Vec<usize>> {
         if self.indices.len() < self.rank {
             return None;
         }
@@ -53,19 +59,18 @@ impl CombinatorialStructure for UniformMatroid {
         indexed_weights.truncate(self.rank);
 
         // map to their original indices
-        Some(indexed_weights.iter().map(|(i, _)| *i).collect())
+        Some(indexed_weights.iter().map(|&(i, _)| i).collect())
     }
 
-    fn reachability_graph(&self, basis: &Vec<usize>) -> Graph {
-        let n = self.indices.len();
-
+    fn reachability_graph(&self, basis: &[usize]) -> Graph {
+        let n = self.get_arm_num();
         let mut in_basis = vec![false; n];
         for &i in basis {
             in_basis[i] = true;
         }
 
         let mut result_graph = Graph::new(n + 1);
-        for v in 0..n {
+        for v in self.get_indices() {
             if in_basis[v] {
                 result_graph.add_edge(v, n);
             } else {
@@ -93,12 +98,12 @@ mod tests {
         let mut rng = rand::thread_rng();
         let weights: Weights = (0..n).map(|_| rng.gen()).collect();
 
-        println!("{:?}", weights);
+        eprintln!("{:?}", weights);
 
         let naive_arm = naive_maxgap(&structure, &weights);
         let faster_arm = structure.fast_maxgap(&weights);
 
-        println!("naive: {}, faster: {}", naive_arm, faster_arm);
+        eprintln!("naive: {}, faster: {}", naive_arm, faster_arm);
         assert!(naive_arm == faster_arm);
     }
 
@@ -121,7 +126,7 @@ mod tests {
         let structure = UniformMatroid::new(n, rank);
 
         let mut csar_optimal = csar(structure.clone(), &mut arms);
-        csar_optimal.sort();
+        csar_optimal.sort_unstable();
 
         let means: Weights = structure
             .get_indices()
@@ -130,11 +135,11 @@ mod tests {
             .collect();
 
         let mut true_optimal = structure.optimal(&means).unwrap();
-        true_optimal.sort();
+        true_optimal.sort_unstable();
 
-        println!("csar: {:?}", csar_optimal);
-        println!("true: {:?}", true_optimal);
-        println!("----------");
+        eprintln!("csar: {:?}", csar_optimal);
+        eprintln!("true: {:?}", true_optimal);
+        eprintln!("----------");
 
         // assert!(csar_optimal == true_optimal);
     }

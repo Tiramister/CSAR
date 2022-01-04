@@ -1,6 +1,5 @@
+use crate::util::union_find::UnionFind;
 use std::{cmp::max, mem::swap};
-
-use crate::{arms::Weights, util::union_find::UnionFind};
 
 #[derive(Clone)]
 pub struct Graph {
@@ -22,9 +21,9 @@ impl Graph {
         self
     }
 
-    pub fn from_edges(edges: &Vec<(usize, usize)>) -> Self {
+    pub fn from_edges(edges: &[(usize, usize)]) -> Self {
         Self {
-            edges: edges.clone(),
+            edges: edges.to_vec(),
             vnum: edges.iter().map(|&(u, v)| max(u, v)).max().unwrap_or(0) + 1,
         }
     }
@@ -81,7 +80,7 @@ impl Graph {
 
     /// Find the maximum spanning tree by the Kruskal's algorithm
     /// It is required that the length of `weights` equals the number of edges.
-    pub fn maximum_spanning_tree(&self, weights: &Weights) -> Option<Vec<usize>> {
+    pub fn maximum_spanning_tree(&self, weights: &[f64]) -> Option<Vec<usize>> {
         // Check the requirement for the length of `weights`.
         assert_eq!(self.edges.len(), weights.len());
 

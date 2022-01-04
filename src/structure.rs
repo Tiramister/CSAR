@@ -1,13 +1,15 @@
 pub mod circuit_matroid;
 pub mod uniform_matroid;
 
+use crate::util::graph::Graph;
 use std::collections::VecDeque;
 
-use crate::{arms::Weights, util::graph::Graph};
-
 pub trait CombinatorialStructure: Clone {
+    /// Get the number of arms.
+    fn get_arm_num(&self) -> usize;
+
     /// Get indices of the remaining arms.
-    fn get_indices(&self) -> &Vec<usize>;
+    fn get_indices(&self) -> Vec<usize>;
 
     /// Contract the arm i.
     /// Assume that the arm i remains.
@@ -18,7 +20,7 @@ pub trait CombinatorialStructure: Clone {
     fn delete_arm(&mut self, i: usize) -> &mut Self;
 
     /// Find the superarm with the maximum sum of weights.
-    fn optimal(&self, weights: &Weights) -> Option<Vec<usize>>;
+    fn optimal(&self, weights: &[f64]) -> Option<Vec<usize>>;
 
     /// Build a directed acyclic graph satisfying the following properties.
     ///
@@ -29,16 +31,13 @@ pub trait CombinatorialStructure: Clone {
     ///     iff the former is in the fundamental circuit of the basis and the latter.
     ///
     /// It is required that `basis` induces a basis.
-    fn reachability_graph(&self, basis: &Vec<usize>) -> Graph;
+    fn reachability_graph(&self, basis: &[usize]) -> Graph;
 
     /// Efficiently find the arm with the maximum gap.
-    fn fast_maxgap(&self, weights: &Weights) -> usize {
-        assert_eq!(self.get_indices().len(), weights.len());
+    fn fast_maxgap(&self, weights: &[f64]) -> usize {
+        let opt_basis = self.optimal(weights).unwrap();
 
-        let mapped_weights: Weights = self.get_indices().iter().map(|&i| weights[i]).collect();
-        let opt_basis = self.optimal(&mapped_weights).unwrap();
-
-        let m = self.get_indices().len();
+        let m = self.get_arm_num();
         let mut in_opt = vec![false; m];
         for &i in &opt_basis {
             in_opt[i] = true;
@@ -121,14 +120,18 @@ pub trait CombinatorialStructure: Clone {
             }
         }
 
-        eprintln!("fast gaps: {:?}", gaps);
+        // eprintln!("fast gaps: {:?}", gaps);
 
         // Return the index with the maximum gap.
-        let (max_i, _max_gap) = gaps
-            .iter()
-            .enumerate()
-            .max_by(|(_, l_gap), (_, r_gap)| l_gap.partial_cmp(r_gap).unwrap())
-            .unwrap();
-        max_i
+        let mut maxgap = f64::NEG_INFINITY;
+        let mut maxgap_arm = 0;
+
+        for i in self.get_indices() {
+            if gaps[i] > maxgap {
+                maxgap = gaps[i];
+                maxgap_arm = i;
+            }
+        }
+        maxgap_arm
     }
 }

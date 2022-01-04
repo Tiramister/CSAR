@@ -1,4 +1,4 @@
-use crate::arms::{Arms, Weights};
+use crate::arms::Arms;
 use crate::sampler::Sampler;
 use crate::structure::CombinatorialStructure;
 
@@ -13,13 +13,13 @@ pub fn csar(mut structure: impl CombinatorialStructure, arms: &mut Arms) -> Vec<
 
     for _ in 0..n {
         // sample the remaining arms 100 times
-        for &i in structure.get_indices() {
+        for i in structure.get_indices() {
             for _ in 0..100 {
                 samplers[i].observe(arms.sample(i));
             }
         }
 
-        let weights: Vec<f64> = (0..n).map(|i| samplers[i].get_mean()).collect();
+        let weights: Vec<f64> = samplers.iter().map(|sampler| sampler.get_mean()).collect();
 
         // Find the optimal superarm and the arm with the maximum gap.
         let best_arms = structure.optimal(&weights).unwrap();
@@ -39,18 +39,18 @@ pub fn csar(mut structure: impl CombinatorialStructure, arms: &mut Arms) -> Vec<
 
 /// Find the arm with the maximum gap.
 /// It is required that the number of arms is greater than 0 and equal to the length of `weights`.
-pub fn naive_maxgap(structure: &impl CombinatorialStructure, weights: &Weights) -> usize {
+pub fn naive_maxgap(structure: &impl CombinatorialStructure, weights: &[f64]) -> usize {
+    let indices = structure.get_indices();
     // Check the requirement
-    assert_ne!(structure.get_indices().len(), 0);
-    assert_eq!(structure.get_indices().len(), weights.len());
+    assert_ne!(indices.len(), 0);
+    assert_eq!(indices.len(), weights.len());
 
     // Find the optimal superarm
     let opt_arms = structure.optimal(weights).unwrap();
     let opt_weight: f64 = opt_arms.iter().map(|&i| weights[i]).sum();
 
     // Whether or not the arm is in the optimal superarm.
-    let num_arms = structure.get_indices().iter().max().unwrap_or(&0) + 1;
-    let mut in_opt = vec![false; num_arms];
+    let mut in_opt = vec![false; structure.get_arm_num()];
     for &i in &opt_arms {
         in_opt[i] = true;
     }
@@ -58,8 +58,8 @@ pub fn naive_maxgap(structure: &impl CombinatorialStructure, weights: &Weights) 
     let mut maxgap = 0_f64;
     let mut best_arm = None;
 
-    for &i in structure.get_indices() {
-        let mut new_structure = (*structure).clone();
+    for &i in &indices {
+        let mut new_structure = structure.clone();
         let mut subopt_weight = 0_f64;
 
         if in_opt[i] {
@@ -90,6 +90,6 @@ pub fn naive_maxgap(structure: &impl CombinatorialStructure, weights: &Weights) 
         id
     } else {
         // If any arms should not be chosen, return the first arm.
-        *structure.get_indices().first().unwrap()
+        *indices.first().unwrap()
     }
 }
