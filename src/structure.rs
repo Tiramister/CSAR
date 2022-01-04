@@ -9,7 +9,7 @@ pub trait CombinatorialStructure: Clone {
     fn get_arm_num(&self) -> usize;
 
     /// Get indices of the remaining arms.
-    fn get_indices(&self) -> Vec<usize>;
+    fn get_arms(&self) -> Vec<usize>;
 
     /// Contract the arm i.
     /// Assume that the arm i remains.
@@ -24,64 +24,69 @@ pub trait CombinatorialStructure: Clone {
 
     /// Build a directed acyclic graph satisfying the following properties.
     ///
-    /// * Every elements in this matroid corresponds to a vertex in DAG.
-    /// * Every vertex corresponding to an element *in* the basis has no incoming edge.
-    /// * Every vertex corresponding to an element *not in* the basis has no outgoing edge.
-    /// * There is a path from an element *in* the basis to an element *not in* the basis
-    ///     iff the former is in the fundamental circuit of the basis and the latter.
+    /// * Every arm corresponds to a vertex in DAG.
+    /// * There is a path from an arm *in* the basis to an arm *not in* the basis
+    ///     iff the former arm is in the fundamental circuit of the latter arm.
     ///
     /// It is required that `basis` induces a basis.
     fn reachability_graph(&self, basis: &[usize]) -> Graph;
 
     /// Efficiently find the arm with the maximum gap.
     fn fast_maxgap(&self, weights: &[f64]) -> usize {
+        let arm_num = self.get_arm_num();
+
+        // Find the optimal basis.
         let opt_basis = self.optimal(weights).unwrap();
 
-        let m = self.get_arm_num();
-        let mut in_opt = vec![false; m];
-        for &i in &opt_basis {
-            in_opt[i] = true;
+        // Whether or not an arm is in the optimal basis.
+        let mut in_opt = vec![false; arm_num];
+        for &arm in &opt_basis {
+            in_opt[arm] = true;
         }
 
+        // Build the reachability graph.
         let reachability_graph = self.reachability_graph(&opt_basis);
         let rvnum = reachability_graph.get_vnum();
 
-        // The bidirectional adjacency lists of the reachability graph.
-        let mut in_to_out_graph = vec![Vec::<usize>::new(); rvnum];
-        let mut out_to_in_graph = vec![Vec::<usize>::new(); rvnum];
+        // Adjacency lists of the reachability graph.
+        let mut adj_from_basis = vec![Vec::<usize>::new(); rvnum];
+        let mut adj_to_basis = vec![Vec::<usize>::new(); rvnum];
         for (u, v) in reachability_graph.get_edges() {
-            in_to_out_graph[u].push(v);
-            out_to_in_graph[v].push(u);
+            adj_from_basis[u].push(v);
+            adj_to_basis[v].push(u);
         }
 
-        let mut gaps = vec![f64::NAN; m];
+        let mut gaps = vec![f64::NAN; arm_num];
 
         // The gaps of edges in the basis.
-        // out -> in with the max operation.
+        // To the basis with the max operation.
         {
             let mut queue = VecDeque::new();
-            let mut degrees: Vec<usize> = in_to_out_graph.iter().map(|vs| vs.len()).collect();
+            let mut indegrees: Vec<usize> = adj_from_basis.iter().map(|vs| vs.len()).collect();
 
             let mut max_weights = vec![f64::NEG_INFINITY; rvnum];
-            for i in 0..m {
-                if !in_opt[i] {
-                    assert_eq!(degrees[i], 0);
-                    max_weights[i] = weights[i];
-                    queue.push_back(i);
+            for v in 0..rvnum {
+                if indegrees[v] == 0 {
+                    if v < arm_num {
+                        max_weights[v] = weights[v];
+                    }
+                    queue.push_back(v);
                 }
             }
 
             while let Some(v) = queue.pop_front() {
-                for &u in &out_to_in_graph[v] {
+                for &u in &adj_to_basis[v] {
                     max_weights[u] = max_weights[u].max(max_weights[v]);
-                    degrees[u] -= 1;
-                    if degrees[u] == 0 {
+                    indegrees[u] -= 1;
+                    if indegrees[u] == 0 {
                         queue.push_back(u);
                     }
                 }
             }
 
-            for i in 0..m {
+            assert!(indegrees.iter().all(|&d| d == 0), "BFS error (to basis)");
+
+            for i in 0..arm_num {
                 if in_opt[i] {
                     gaps[i] = weights[i] - max_weights[i];
                 }
@@ -89,49 +94,56 @@ pub trait CombinatorialStructure: Clone {
         }
 
         // The gaps of edges not in the basis.
-        // in -> out with the min operation.
+        // From the basis with the min operation.
         {
             let mut queue = VecDeque::new();
-            let mut degrees: Vec<usize> = out_to_in_graph.iter().map(|vs| vs.len()).collect();
+            let mut indegrees: Vec<usize> = adj_to_basis.iter().map(|vs| vs.len()).collect();
 
             let mut min_weights = vec![f64::INFINITY; rvnum];
-            for i in 0..m {
-                if in_opt[i] {
-                    assert_eq!(degrees[i], 0);
-                    min_weights[i] = weights[i];
-                    queue.push_back(i);
+            for v in 0..rvnum {
+                if indegrees[v] == 0 {
+                    if v < arm_num {
+                        min_weights[v] = weights[v];
+                    }
+                    queue.push_back(v);
                 }
             }
 
             while let Some(v) = queue.pop_front() {
-                for &u in &in_to_out_graph[v] {
+                for &u in &adj_from_basis[v] {
                     min_weights[u] = min_weights[u].min(min_weights[v]);
-                    degrees[u] -= 1;
-                    if degrees[u] == 0 {
+                    indegrees[u] -= 1;
+                    if indegrees[u] == 0 {
                         queue.push_back(u);
                     }
                 }
             }
 
-            for i in 0..m {
+            assert!(indegrees.iter().all(|&d| d == 0), "BFS error (from basis)");
+
+            for i in 0..arm_num {
                 if !in_opt[i] {
                     gaps[i] = min_weights[i] - weights[i];
                 }
             }
         }
 
-        // eprintln!("fast gaps: {:?}", gaps);
-
         // Return the index with the maximum gap.
         let mut maxgap = f64::NEG_INFINITY;
         let mut maxgap_arm = 0;
 
-        for i in self.get_indices() {
+        for i in self.get_arms() {
             if gaps[i] > maxgap {
                 maxgap = gaps[i];
                 maxgap_arm = i;
             }
         }
+
         maxgap_arm
     }
+}
+
+pub trait RandomSample {
+    /// Randomly sample an instance with `arm_num` arms.
+    fn sample(arm_num: usize) -> Self;
 }

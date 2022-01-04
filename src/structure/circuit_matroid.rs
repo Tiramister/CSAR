@@ -1,19 +1,21 @@
-use super::CombinatorialStructure;
+use super::{CombinatorialStructure, RandomSample};
 use crate::{arms::Weights, util::graph::Graph};
+use rand::Rng;
 use std::{collections::VecDeque, mem::swap};
 
 #[derive(Clone)]
 pub struct CircuitMatroid {
     arm_num: usize,
-    indices: Vec<usize>,
+    arms: Vec<usize>,
     graph: Graph,
 }
 
 impl CircuitMatroid {
     pub fn new(graph: &Graph) -> Self {
+        let m = graph.get_edges().len();
         CircuitMatroid {
-            arm_num: graph.get_edges().len(),
-            indices: (0..graph.get_edges().len()).collect(),
+            arm_num: m,
+            arms: (0..m).collect(),
             graph: graph.clone(),
         }
     }
@@ -24,46 +26,46 @@ impl CombinatorialStructure for CircuitMatroid {
         self.arm_num
     }
 
-    fn get_indices(&self) -> Vec<usize> {
-        self.indices.clone()
+    fn get_arms(&self) -> Vec<usize> {
+        self.arms.clone()
     }
 
     fn contract_arm(&mut self, i: usize) -> &mut Self {
-        let pos = self.get_indices().iter().position(|&r| r == i).unwrap();
-        self.graph.contract_by_edge(pos);
+        let pos = self.get_arms().iter().position(|&r| r == i).unwrap();
 
+        self.graph.contract_edge(pos);
         // Keep the order of edges
-        self.indices.swap_remove(pos);
+        self.arms.swap_remove(pos);
 
         self
     }
 
     fn delete_arm(&mut self, i: usize) -> &mut Self {
-        let pos = self.get_indices().iter().position(|&r| r == i).unwrap();
-        self.graph.delete_edge(pos);
+        let pos = self.get_arms().iter().position(|&r| r == i).unwrap();
 
+        self.graph.delete_edge(pos);
         // Keep the order of edges
-        self.indices.swap_remove(pos);
+        self.arms.swap_remove(pos);
 
         self
     }
 
     fn optimal(&self, weights: &[f64]) -> Option<Vec<usize>> {
-        // Reorder weights by edge-indices.
-        let mapped_weights: Weights = self.get_indices().iter().map(|&i| weights[i]).collect();
+        // Reorder weights to be edge-indexed.
+        let mapped_weights: Weights = self.get_arms().iter().map(|&i| weights[i]).collect();
 
         self.graph
             .maximum_spanning_tree(&mapped_weights)
-            .map(|mst| mst.iter().map(|&i| self.indices[i]).collect())
+            .map(|mst| mst.iter().map(|&i| self.arms[i]).collect())
     }
 
     fn reachability_graph(&self, opt_arms: &[usize]) -> Graph {
-        let m = self.get_arm_num();
-        let indices = self.get_indices();
+        let arm_num = self.get_arm_num();
+        let arms = self.get_arms();
 
         // arm-index to edge-index
-        let mut arm_to_edge = vec![0_usize; m];
-        for (edge_i, &arm_i) in indices.iter().enumerate() {
+        let mut arm_to_edge = vec![0_usize; arm_num];
+        for (edge_i, &arm_i) in arms.iter().enumerate() {
             arm_to_edge[arm_i] = edge_i;
         }
 
@@ -80,7 +82,7 @@ impl CombinatorialStructure for CircuitMatroid {
             adj[v].push(edge_i);
         }
 
-        let mut result_graph = Graph::new(m);
+        let mut result_graph = Graph::new(arm_num);
 
         // Make rooted from the vertex 0.
         // The depth of each vertex.
@@ -128,7 +130,7 @@ impl CombinatorialStructure for CircuitMatroid {
                     // Set p as the parent of q.
                     depth[v] = depth[u] + 1;
                     par_vertex[v].push(u);
-                    par_edge[v].push(indices[i]);
+                    par_edge[v].push(arms[i]);
                     queue.push_back(v);
                 }
             }
@@ -152,7 +154,7 @@ impl CombinatorialStructure for CircuitMatroid {
                 }
 
                 let k = (depth[u] - depth[v]).trailing_zeros() as usize;
-                result_graph.add_edge(par_edge[u][k], indices[i]);
+                result_graph.add_edge(par_edge[u][k], arms[i]);
                 u = par_vertex[u][k];
             }
             assert_eq!(depth[u], depth[v]);
@@ -164,24 +166,29 @@ impl CombinatorialStructure for CircuitMatroid {
             assert_eq!(par_edge[u].len(), par_edge[v].len());
             let kmax = par_edge[u].len();
             for k in (0..kmax).rev() {
+                if par_vertex[u].len() <= k {
+                    continue;
+                }
+
                 let nu = par_vertex[u][k];
                 let nv = par_vertex[v][k];
 
                 // Climb 2^k edges if u and v don't come to equal.
                 if nu != nv {
                     result_graph
-                        .add_edge(par_edge[u][k], indices[i])
-                        .add_edge(par_edge[v][k], indices[i]);
+                        .add_edge(par_edge[u][k], arms[i])
+                        .add_edge(par_edge[v][k], arms[i]);
                     u = nu;
                     v = nv;
                 }
+                assert_eq!(depth[u], depth[v]);
             }
             assert_ne!(u, v);
 
             // Climb the last one edge to make u and v equal.
             result_graph
-                .add_edge(par_edge[u][0], indices[i])
-                .add_edge(par_edge[v][0], indices[i]);
+                .add_edge(par_edge[u][0], arms[i])
+                .add_edge(par_edge[v][0], arms[i]);
             u = par_vertex[u][0];
             v = par_vertex[v][0];
             assert_eq!(u, v);
@@ -191,32 +198,38 @@ impl CombinatorialStructure for CircuitMatroid {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::mem::swap;
-
-    use itertools::iproduct;
-    use rand::Rng;
-
-    use crate::{
-        algorithm::{csar, naive_maxgap},
-        arms::{Arms, Weights},
-        structure::{circuit_matroid::CircuitMatroid, CombinatorialStructure},
-        util::{graph::Graph, union_find::UnionFind},
-    };
-
-    #[test]
-    fn reachable_random() {
+impl RandomSample for CircuitMatroid {
+    fn sample(arm_num: usize) -> Self {
         let mut rng = rand::thread_rng();
+        // let vnum = rng.gen_range((arm_num / 4)..(arm_num / 3));
+        let vnum = arm_num * 2 / 3;
 
-        let n = 8;
-        let m = 15;
-        let mut graph = Graph::new(n);
+        let mut graph = Graph::new(vnum);
 
-        let mut tree_edges = Vec::<usize>::new();
-        while graph.get_edges().len() != m {
-            let mut u = rng.gen_range(0..n);
-            let mut v = rng.gen_range(0..n);
+        // Build a spanning tree.
+        {
+            let mut us: Vec<usize> = vec![0];
+            let mut vs: Vec<usize> = (1..vnum).collect();
+            for _ in 0..(vnum - 1) {
+                let ui = rng.gen_range(0..us.len());
+                let vi = rng.gen_range(0..vs.len());
+
+                let mut u = us[ui];
+                let mut v = vs[vi];
+                if u > v {
+                    swap(&mut u, &mut v);
+                }
+                graph.add_edge(u, v);
+
+                us.push(vs[vi]);
+                vs.swap_remove(vi);
+            }
+        }
+
+        // Add edges randomly.
+        while graph.get_edges().len() < arm_num {
+            let mut u = rng.gen_range(0..vnum);
+            let mut v = rng.gen_range(0..vnum);
 
             if u > v {
                 swap(&mut u, &mut v);
@@ -226,107 +239,104 @@ mod tests {
             }
         }
 
-        let mut uf = UnionFind::new(n);
+        CircuitMatroid::new(&graph)
+    }
+}
 
-        while tree_edges.len() != n - 1 {
-            let i = rng.gen_range(0..m);
-            let (u, v) = graph.get_edges()[i];
+#[cfg(test)]
+mod tests {
+    use crate::{
+        arms::Weights,
+        structure::{circuit_matroid::CircuitMatroid, CombinatorialStructure, RandomSample},
+    };
+    use rand::Rng;
+    use std::collections::VecDeque;
 
-            if !uf.same(u, v) {
-                uf.unite(u, v);
-                tree_edges.push(i);
+    #[test]
+    fn reachability_test() {
+        let arm_num = 1000;
+        let structure = CircuitMatroid::sample(arm_num);
+
+        let mut rng = rand::thread_rng();
+        let weights: Weights = (0..arm_num).map(|_| rng.gen()).collect();
+        let opt_arms = structure.optimal(&weights).unwrap();
+
+        let mut in_opt = vec![false; arm_num];
+        for &i in &opt_arms {
+            in_opt[i] = true;
+        }
+
+        let rgraph = structure.reachability_graph(&opt_arms);
+        let rvnum = rgraph.get_vnum();
+
+        let mut adj = vec![Vec::<usize>::new(); rvnum];
+        for (u, v) in rgraph.get_edges() {
+            adj[u].push(v);
+        }
+
+        // The arms in the optimal superarm and reachable to the vertex `v`.
+        // These arms should be in the fundamental circuit of `v`.
+        let mut reachable_from = vec![Vec::<usize>::new(); rvnum];
+        for s in 0..arm_num {
+            if !in_opt[s] {
+                continue;
+            }
+
+            let mut visited = vec![false; rvnum];
+            let mut queue = VecDeque::<usize>::new();
+
+            visited[s] = true;
+            queue.push_back(s);
+
+            while let Some(v) = queue.pop_front() {
+                if v < arm_num && !in_opt[v] {
+                    reachable_from[v].push(s);
+                }
+
+                for &u in &adj[v] {
+                    if !visited[u] {
+                        visited[u] = true;
+                        queue.push_back(u);
+                    }
+                }
             }
         }
 
-        eprintln!("tree:   {:?}", &tree_edges);
-        eprintln!("graph:  {:?}", &graph.get_edges());
-
-        let structure = CircuitMatroid::new(&graph);
-        let rgraph = structure.reachability_graph(&tree_edges);
-
-        eprintln!("rgraph: {:?}", &rgraph.get_edges());
-    }
-
-    fn test_maxgap_once(n: usize) {
-        let mut rng = rand::thread_rng();
-
-        // Generate a connected graph randomly.
-        let mut graph = Graph::new(n);
-
-        {
-            let mut uf = UnionFind::new(n);
-            while uf.get_size(0) != n || graph.get_edges().len() < n * 2 {
-                let mut u = rng.gen_range(0..n);
-                let mut v = rng.gen_range(0..n);
-
-                if u > v {
-                    swap(&mut u, &mut v);
-                }
-                if u != v && !graph.get_edges().contains(&(u, v)) {
-                    uf.unite(u, v);
-                    graph.add_edge(u, v);
-                }
+        let edges = structure.graph.get_edges();
+        for unopt_arm in 0..arm_num {
+            if in_opt[unopt_arm] {
+                continue;
             }
-        }
 
-        let m = graph.get_edges().len();
-        let structure = CircuitMatroid::new(&graph);
+            let mut path = vec![Vec::<usize>::new(); arm_num];
+            let mut visited = vec![true; arm_num];
+            for &opt_arm in &reachable_from[unopt_arm] {
+                let (u, v) = edges[opt_arm];
+                path[u].push(v);
+                path[v].push(u);
+                visited[u] = false;
+                visited[v] = false;
+            }
 
-        // Generate weights randomly.
-        let weights: Weights = (0..m).map(|_| rng.gen()).collect();
+            let (mut s, g) = edges[unopt_arm];
+            let mut prev = s;
+            visited[s] = true;
+            while s != g {
+                let mut nexts = Vec::new();
+                for &v in &path[s] {
+                    if v != prev {
+                        nexts.push(v);
+                    }
+                }
+                assert_eq!(nexts.len(), 1, "Not a path.");
 
-        eprintln!("graph:   {:?}", graph.get_edges());
-        eprintln!("weights: {:?}", weights);
+                let next = nexts[0];
+                prev = s;
+                s = next;
+                visited[s] = true;
+            }
 
-        // Find the edge with the maximum gap.
-        let naive_arm = naive_maxgap(&structure, &weights);
-        let faster_arm = structure.fast_maxgap(&weights);
-
-        eprintln!("naive: {}, faster: {}", naive_arm, faster_arm);
-        assert!(naive_arm == faster_arm);
-    }
-
-    #[test]
-    fn test_maxgap() {
-        for _ in 0..10 {
-            test_maxgap_once(5);
-        }
-    }
-
-    fn test_csar_once(n: usize) {
-        // Generate the complete graph.
-        let edges: Vec<(usize, usize)> =
-            iproduct!((0..n), (0..n)).filter(|&(x, y)| x < y).collect();
-        let graph = Graph::from_edges(&edges);
-        let structure = CircuitMatroid::new(&graph);
-
-        // generate arms randomly
-        let mut arms = Arms::new();
-        let mut rng = rand::thread_rng();
-        for _ in 0..edges.len() {
-            arms.add_arm(rng.gen(), rng.gen());
-        }
-
-        let mut csar_optimal = csar(structure.clone(), &mut arms);
-        csar_optimal.sort_unstable();
-
-        let means: Weights = structure
-            .get_indices()
-            .iter()
-            .map(|&i| arms.get_mean(i))
-            .collect();
-
-        let mut true_optimal = structure.optimal(&means).unwrap();
-        true_optimal.sort_unstable();
-
-        eprintln!("csar: {:?}", csar_optimal);
-        eprintln!("true: {:?}", true_optimal);
-    }
-
-    #[test]
-    fn test_csar() {
-        for _ in 0..10 {
-            test_csar_once(10);
+            assert!(visited.iter().all(|&b| b), "Not connected.");
         }
     }
 }

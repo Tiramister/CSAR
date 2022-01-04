@@ -37,8 +37,8 @@ impl Graph {
     }
 
     /// Contract this graph by the i-th edge.
-    /// You can keep the indices of edges by swap_remove(i).
-    pub fn contract_by_edge(&mut self, i: usize) -> &mut Self {
+    /// You can keep the arm indices of edges by swap_remove(i).
+    pub fn contract_edge(&mut self, i: usize) -> &mut Self {
         let (mut s, mut t) = self.edges[i];
 
         if s > t {
@@ -72,7 +72,7 @@ impl Graph {
     }
 
     /// Delete the i-th edge.
-    /// You can keep the indices of edges by swap_remove(i).
+    /// You can keep the arm indices of edges by swap_remove(i).
     pub fn delete_edge(&mut self, i: usize) -> &mut Self {
         self.edges.swap_remove(i);
         self
@@ -88,20 +88,25 @@ impl Graph {
             return None;
         }
 
-        // Sort indices by weights in decreasing order
-        let mut indices: Vec<usize> = (0..self.edges.len()).collect();
-        indices.sort_unstable_by(|&i, &j| weights[i].partial_cmp(&weights[j]).unwrap().reverse());
+        // Sort arms by weights in decreasing order
+        let mut arms: Vec<usize> = (0..self.edges.len()).collect();
+        arms.sort_unstable_by(|&i, &j| weights[i].partial_cmp(&weights[j]).unwrap().reverse());
 
         // Add the heaviest edge greedily if it doesn't induce any cycle.
         let mut mst = Vec::<usize>::new();
         let mut uf = UnionFind::new(self.vnum);
-        for i in indices {
+        for i in arms {
             let (u, v) = self.edges[i];
             if !uf.same(u, v) {
                 uf.unite(u, v);
                 mst.push(i);
             }
         }
-        Some(mst)
+
+        if uf.get_size(0) == self.vnum {
+            Some(mst)
+        } else {
+            None
+        }
     }
 }

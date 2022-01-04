@@ -1,4 +1,6 @@
-use super::CombinatorialStructure;
+use rand::Rng;
+
+use super::{CombinatorialStructure, RandomSample};
 use crate::util::graph::Graph;
 
 #[derive(Clone)]
@@ -23,19 +25,19 @@ impl CombinatorialStructure for UniformMatroid {
         self.arm_num
     }
 
-    fn get_indices(&self) -> Vec<usize> {
+    fn get_arms(&self) -> Vec<usize> {
         self.indices.clone()
     }
 
     fn contract_arm(&mut self, i: usize) -> &mut Self {
-        let pos = self.get_indices().iter().position(|&r| r == i).unwrap();
+        let pos = self.get_arms().iter().position(|&r| r == i).unwrap();
         self.indices.swap_remove(pos);
         self.rank -= 1;
         self
     }
 
     fn delete_arm(&mut self, i: usize) -> &mut Self {
-        let pos = self.get_indices().iter().position(|&r| r == i).unwrap();
+        let pos = self.get_arms().iter().position(|&r| r == i).unwrap();
         self.indices.swap_remove(pos);
         self
     }
@@ -46,11 +48,8 @@ impl CombinatorialStructure for UniformMatroid {
         }
 
         // zip indices of arms and their weights
-        let mut indexed_weights: Vec<(usize, f64)> = self
-            .get_indices()
-            .iter()
-            .map(|&i| (i, weights[i]))
-            .collect();
+        let mut indexed_weights: Vec<(usize, f64)> =
+            self.get_arms().iter().map(|&i| (i, weights[i])).collect();
 
         // sort by weights in decreasing order
         indexed_weights.sort_unstable_by(|(_, fl), (_, fr)| fl.partial_cmp(fr).unwrap().reverse());
@@ -70,7 +69,7 @@ impl CombinatorialStructure for UniformMatroid {
         }
 
         let mut result_graph = Graph::new(n + 1);
-        for v in self.get_indices() {
+        for v in self.get_arms() {
             if in_basis[v] {
                 result_graph.add_edge(v, n);
             } else {
@@ -82,72 +81,10 @@ impl CombinatorialStructure for UniformMatroid {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use rand::Rng;
-
-    use crate::{
-        algorithm::{csar, naive_maxgap},
-        arms::{Arms, Weights},
-        structure::{uniform_matroid::UniformMatroid, CombinatorialStructure},
-    };
-
-    fn test_maxgap_once(n: usize, rank: usize) {
-        let structure = UniformMatroid::new(n, rank);
-
+impl RandomSample for UniformMatroid {
+    fn sample(arm_num: usize) -> Self {
         let mut rng = rand::thread_rng();
-        let weights: Weights = (0..n).map(|_| rng.gen()).collect();
-
-        eprintln!("{:?}", weights);
-
-        let naive_arm = naive_maxgap(&structure, &weights);
-        let faster_arm = structure.fast_maxgap(&weights);
-
-        eprintln!("naive: {}, faster: {}", naive_arm, faster_arm);
-        assert!(naive_arm == faster_arm);
-    }
-
-    #[test]
-    fn test_maxgap() {
-        for _ in 0..10 {
-            test_maxgap_once(100, 50);
-        }
-    }
-
-    fn test_csar_once(n: usize, rank: usize) {
-        let mut arms = Arms::new();
-
-        // generate arms randomly
-        let mut rng = rand::thread_rng();
-        for _ in 0..n {
-            arms.add_arm(rng.gen(), rng.gen());
-        }
-
-        let structure = UniformMatroid::new(n, rank);
-
-        let mut csar_optimal = csar(structure.clone(), &mut arms);
-        csar_optimal.sort_unstable();
-
-        let means: Weights = structure
-            .get_indices()
-            .iter()
-            .map(|&i| arms.get_mean(i))
-            .collect();
-
-        let mut true_optimal = structure.optimal(&means).unwrap();
-        true_optimal.sort_unstable();
-
-        eprintln!("csar: {:?}", csar_optimal);
-        eprintln!("true: {:?}", true_optimal);
-        eprintln!("----------");
-
-        // assert!(csar_optimal == true_optimal);
-    }
-
-    #[test]
-    fn test_csar() {
-        for _ in 0..10 {
-            test_csar_once(10, 5);
-        }
+        let rank = rng.gen_range(0..(arm_num + 1));
+        UniformMatroid::new(arm_num, rank)
     }
 }
