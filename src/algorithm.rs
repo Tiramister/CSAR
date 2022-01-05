@@ -97,6 +97,7 @@ pub fn naive_maxgap(structure: &impl CombinatorialStructure, weights: &[f64]) ->
     }
 }
 
+#[allow(dead_code)]
 pub mod tests {
     use crate::{
         algorithm::{csar, naive_maxgap},

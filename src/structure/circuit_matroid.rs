@@ -1,7 +1,7 @@
 use super::{CombinatorialStructure, RandomSample};
 use crate::{arms::Weights, util::graph::Graph};
 use rand::Rng;
-use std::{collections::VecDeque, mem::swap};
+use std::{cmp::max, collections::VecDeque, mem::swap};
 
 #[derive(Clone)]
 pub struct CircuitMatroid {
@@ -201,8 +201,12 @@ impl CombinatorialStructure for CircuitMatroid {
 impl RandomSample for CircuitMatroid {
     fn sample(arm_num: usize) -> Self {
         let mut rng = rand::thread_rng();
-        // let vnum = rng.gen_range((arm_num / 4)..(arm_num / 3));
-        let vnum = arm_num * 2 / 3;
+
+        let vnum = if arm_num >= 40 {
+            rng.gen_range((arm_num / 4)..(arm_num / 3))
+        } else {
+            max(10, arm_num - 10)
+        };
 
         let mut graph = Graph::new(vnum);
 

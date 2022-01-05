@@ -21,13 +21,6 @@ impl Graph {
         self
     }
 
-    pub fn from_edges(edges: &[(usize, usize)]) -> Self {
-        Self {
-            edges: edges.to_vec(),
-            vnum: edges.iter().map(|&(u, v)| max(u, v)).max().unwrap_or(0) + 1,
-        }
-    }
-
     pub fn get_vnum(&self) -> usize {
         self.vnum
     }

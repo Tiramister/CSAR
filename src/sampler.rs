@@ -22,9 +22,4 @@ impl Sampler {
     pub fn get_mean(&self) -> f64 {
         self.mean
     }
-
-    /// Return the number of observations.
-    pub fn get_trial(&self) -> u32 {
-        self.trial
-    }
 }
