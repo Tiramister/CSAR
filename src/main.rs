@@ -1,10 +1,14 @@
+use std::time::Instant;
+
 use crate::{
     algorithm::csar,
     arms::{Arms, Weights},
-    structure::{uniform_matroid::UniformMatroid, CombinatorialStructure, RandomSample},
+    structure::{
+        circuit_matroid::CircuitMatroid, uniform_matroid::UniformMatroid, CombinatorialStructure,
+        RandomSample,
+    },
 };
 use rand::{thread_rng, Rng};
-use structure::circuit_matroid::CircuitMatroid;
 
 mod algorithm;
 mod arms;
@@ -38,6 +42,7 @@ fn read_int(maximum: usize, request_msg: &str) -> usize {
 const EPS: f64 = 1e-15;
 
 fn main() {
+    // Query the settings of the experiment.
     let structure_type = read_int(
         2,
         r"Which combinatorial structure to test?
@@ -56,6 +61,7 @@ fn main() {
     let trials = read_int(100_000, "The number of trials > ");
     eprintln!("[INFO] {} trials(s).", trials);
 
+    // Sample an instance randomly.
     let structure = if structure_type == 0 {
         EnumCombinatorialStructures::UniformMatroid(UniformMatroid::sample(arm_num))
     } else {
@@ -63,40 +69,63 @@ fn main() {
     };
     eprintln!("[INFO] An instance has been randomly sampled.");
 
+    let mut total_elapsed_time = 0;
+    let mut correct_count = 0;
+
     let mut rng = thread_rng();
     for _ in 0..trials {
+        // Generate arms randomly.
         let mut arms = Arms::new();
         for _ in 0..arm_num {
             arms.add_arm(rng.gen(), rng.gen());
         }
-
         let means: Weights = (0..arm_num).map(|i| arms.get_mean(i)).collect();
 
+        // Execute CSAR.
+        // Measure the elapsed time.
+        let start_time = Instant::now();
         let csar_optimal = match &structure {
             EnumCombinatorialStructures::UniformMatroid(s) => csar(s.clone(), &mut arms),
             EnumCombinatorialStructures::CircuitMatroid(s) => csar(s.clone(), &mut arms),
         };
+        let elapsed = start_time.elapsed();
         let csar_weight: f64 = csar_optimal.iter().map(|&i| means[i]).sum();
 
+        // The elapsed time.
+        eprintln!("[INFO] Elapsed time: {} ms", elapsed.as_millis());
+        total_elapsed_time += elapsed.as_millis();
+
+        // Find the true optimal superarm.
         let true_optimal = match &structure {
             EnumCombinatorialStructures::UniformMatroid(s) => s.optimal(&means).unwrap(),
             EnumCombinatorialStructures::CircuitMatroid(s) => s.optimal(&means).unwrap(),
         };
         let true_weight: f64 = true_optimal.iter().map(|&i| means[i]).sum();
 
+        // Check the relative error.
         let relative_error = (true_weight - csar_weight) / true_weight;
         if relative_error < EPS {
             eprintln!(
                 "[RESULT] Correct. The relative error = {:.20}",
                 relative_error
             );
+            correct_count += 1;
         } else {
             eprintln!(
-                "[RESULT] Wrong.   The relative error = {:.20}",
+                "[RESULT] Wrong. The relative error = {:.20}",
                 relative_error
             );
         }
     }
+
+    println!(
+        r"[SUMMARY]
+    Average elapsed time: {} ms
+    Accepted Ratio      : {}/{}",
+        total_elapsed_time / (trials as u128),
+        correct_count,
+        trials
+    );
 }
 
 #[cfg(test)]
